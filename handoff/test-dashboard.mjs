@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+const result=await build({stdin:{contents:"export * from './src/dashboard/model';export * from './src/dashboard/rules';",resolveDir:process.cwd()},bundle:true,write:false,format:'esm',platform:'node'});
+const {initial,reconcile,activate,prerequisites,runtime,authorize,recommendation,onboardingComplete}=await import('data:text/javascript;base64,'+Buffer.from(result.outputFiles[0].text).toString('base64'));
+const ready=()=>reconcile({...initial(),auth:true,connected:true,scan:9,integrations:{'Store chat':true,Email:true,WhatsApp:true,Instagram:false}});
+let s=initial();assert.ok(reconcile(s).employees.every(e=>e.status==='Draft'));assert.equal(activate(s,'maya'),s);
+s=ready();assert.equal(s.employees[0].status,'Needs setup');assert.equal(s.employees[1].status,'Draft');assert.equal(s.employees[3].status,'Needs setup');assert.equal(recommendation(s).employee.id,'maya');
+let empty=reconcile({...s,scenario:'Empty catalogue'});assert.equal(empty.employees[0].status,'Draft');assert.notEqual(recommendation(empty).employee.id,'maya');assert.equal(recommendation(empty).employee.id,'leo');
+let noOne=reconcile({...empty,integrations:{'Store chat':false,Email:false,WhatsApp:false,Instagram:false}});assert.equal(recommendation(noOne).employee,undefined);
+// Readiness is role-specific: product shortage does not block support.
+assert.equal(prerequisites(empty,empty.employees[3]).length,0);
+s=reconcile({...s,employees:s.employees.map(e=>e.id==='maya'?{...e,configured:true,reviewed:true,previewed:true}:e)});assert.equal(s.employees[0].status,'Ready to activate');assert.equal(onboardingComplete(s),false);
+s=activate(s,'maya');assert.equal(s.employees[0].status,'Active');assert.equal(onboardingComplete(s),true,'Optional policy warnings do not keep First Steps open');
+let lost=reconcile({...s,widget:false});assert.equal(lost.employees[0].status,'Active');assert.equal(runtime(lost,lost.employees[0]).health,'Paused');assert.equal(authorize(lost,lost.employees[0],'Store chat','Recommend a product').allowed,false);assert.equal(lost.employees[0].configured,true);assert.equal(onboardingComplete(lost),false);
+let recovered=reconcile({...lost,widget:true});assert.equal(runtime(recovered,recovered.employees[0]).health,'Healthy');assert.equal(authorize(recovered,recovered.employees[0],'Store chat','Recommend a product').allowed,true);
+let cart=ready();cart.data.consentSource='Explicit test fixture';cart.employees[1]={...cart.employees[1],channels:['Email','WhatsApp'],configured:true,reviewed:true,previewed:true,settings:{timing:'Explicit test schedule',recipientEligible:'yes'}};cart=activate(reconcile(cart),'emma');assert.equal(cart.employees[1].status,'Active');
+cart=reconcile({...cart,integrations:{...cart.integrations,WhatsApp:false}});const emma=cart.employees[1];assert.equal(emma.status,'Active');assert.equal(runtime(cart,emma).health,'Action required');assert.equal(authorize(cart,emma,'WhatsApp','Send recovery message').allowed,false);assert.equal(authorize(cart,emma,'Email','Send recovery message').allowed,true);
+const policyLost={...cart,data:{...cart.data,consentSource:''}};assert.equal(authorize(policyLost,emma,'Email','Send recovery message').allowed,false);
+const manuallyPaused={...emma,paused:true};assert.equal(runtime(cart,manuallyPaused).health,'Paused');assert.equal(authorize(cart,manuallyPaused,'Email','Send recovery message').allowed,false);
+assert.equal(authorize(cart,emma,'Email','Exceptional discount').allowed,false);assert.match(authorize(cart,emma,'Email','Exceptional discount').message,/Not configured/);
+const full={...emma,mode:'full',settings:{discountCap:'Explicit test cap',policySource:'Explicit test policy'}};assert.equal(authorize(cart,full,'Email','Exceptional discount').allowed,false,'No financial executor or verified eligibility means no execution');
+const res=JSON.parse(JSON.stringify(cart));assert.equal(reconcile(res).employees[1].status,'Active');assert.equal(runtime(reconcile(res),res.employees[1]).health,'Action required');
+console.log('Passed: role prerequisites, recommendation fallback, lifecycle, onboarding completion, partial outage, recovery, pause, consent loss, persistence and financial action guards.');
