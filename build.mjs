@@ -7,4 +7,6 @@ const js=result.outputFiles.find(f=>f.path.endsWith('.js')).text;
 const css=result.outputFiles.find(f=>f.path.endsWith('.css')).text;
 const fonts=[400,500,600].map(w=>`@font-face{font-family:'Inter Tight';font-weight:${w};src:url(data:font/woff2;base64,${readFileSync(`public/fonts/inter-tight-${w}.woff2`).toString('base64')}) format('woff2');font-display:swap}`).join('');
 writeFileSync(resolve(out,'index.html'),`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GoPrimy merchant dashboard demo</title><style>${fonts}body{margin:0}button,input,select,textarea{font:inherit}h1,h2,h3,p{margin-top:0}button,input{line-height:inherit}${css}</style></head><body><div id="root"></div><script>${js.replace(/<\/script/gi,'<\\/script')}</script></body></html>`);
-console.log('Exported self-contained dashboard HTML and React source.');
+mkdirSync(resolve('dist'),{recursive:true});
+cpSync(resolve(out,'index.html'),resolve('dist/index.html'));
+console.log('Exported standalone index.html and deployment output dist/index.html.');
